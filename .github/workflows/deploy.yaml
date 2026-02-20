@@ -59,37 +59,70 @@
 #           docker push ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:latest
 
 name: Build, Push & Deploy Docker Image
+
 on:
   push:
     branches:
       - main
+
+env:
+  IMAGE_NAME: github-actions-repo
+  IMAGE_TAG: v1
+
 jobs:
-  build-push-deploy:
+  # =========================
+  # 1️⃣ BUILD IMAGE
+  # =========================
+  build-image:
+    name: Build Docker Image
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout source code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Login to Docker Hub
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+
+  # =========================
+  # 2️⃣ PUSH IMAGE
+  # =========================
+  push-image:
+    name: Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build-image
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-      # 3️⃣ Build Docker image
-      - name: Build Docker image
+      - name: Build Docker image (rebuild for push)
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1 .
+          docker build \
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
 
-      # 4️⃣ Push Docker image
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
+          docker push \
+            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
-      # 5️⃣ Setup SSH for EC2
+  # =========================
+  # 3️⃣ DEPLOY TO EC2
+  # =========================
+  deploy-to-ec2:
+    name: Deploy on EC2
+    runs-on: ubuntu-latest
+    needs: push-image
+
+    steps:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -97,13 +130,12 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # 6️⃣ Deploy on EC2
       - name: Deploy Docker image on EC2
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-            docker pull ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
+            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
             docker stop backend-app || true
             docker rm backend-app || true
@@ -112,5 +144,5 @@ jobs:
               --name backend-app \
               -p 8080:8080 \
               --restart unless-stopped \
-              ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
+              ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           EOF
