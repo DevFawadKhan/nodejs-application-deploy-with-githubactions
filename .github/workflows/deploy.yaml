@@ -82,12 +82,12 @@ jobs:
       # 3️⃣ Build Docker image
       - name: Build Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:latest .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1 .
 
       # 4️⃣ Push Docker image
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
 
       # 5️⃣ Setup SSH for EC2
       - name: Setup SSH
@@ -103,14 +103,14 @@ jobs:
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-            docker pull ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
 
             docker stop backend-app || true
             docker rm backend-app || true
 
             docker run -d \
               --name backend-app \
-              -p 80:8080 \
+              -p 8080:8080 \
               --restart unless-stopped \
-              ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:latest
+              ${{ secrets.DOCKER_USERNAME }}/github-actions-repo:v1
           EOF

@@ -4,10 +4,12 @@ const app = express();
 const PORT = process.env.PORT ?? 8080;
 
 app.get("/", (req, res) => {
-  return res.json({ msg: "Hello from the server v2 deployed to EC2!\n" });
+  return res.json({
+    msg: "Hello from the server deployed to Docker container!\n",
+  });
 });
 app.get("/ec2", (req, res) => {
-  return res.json({ msg: "This is the EC2 endpoint!" });
+  return res.json({ msg: "This is the Docker container endpoint!" });
 });
 
 app.listen(PORT, () => {
